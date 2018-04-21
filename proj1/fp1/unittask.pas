@@ -24,10 +24,12 @@ function getTaskDBLocation(db : TaskDB; id : LongInt) : LongInt;
 function getTaskByID(db : TaskDB; id : LongInt) : Task;       
 procedure replaceTaskByID(var db : TaskDB; newtask : Task);
 function loadDBFromFile(filename : String) : TaskDB;
+function getComputersCount(filename : String) : LongInt;
 procedure printDBContent(db : TaskDB);
 procedure dropDB(var db : TaskDB);
 function findCriticalPath(var db : TaskDB; var tk : Task) : LongInt;        
-function applyCPM(var db : TaskDB) : LongInt;                        
+function applyCPM(var db : TaskDB) : LongInt; 
+procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);                       
 
 implementation
 
@@ -38,7 +40,7 @@ uses
 
 function table_min(tab : array of LongInt) : LongInt;
 var
-	i : Integer;
+	i : LongInt;
 	s : LongInt;
 begin
 	s := tab[0];
@@ -49,7 +51,7 @@ end;
 
 function table_max(tab : array of LongInt) : LongInt;
 var
-	i : Integer;
+	i : LongInt;
 	s : LongInt;
 begin
 	s := tab[0];
@@ -123,7 +125,7 @@ var
 	fp   : Text;
 	L    : TStrings;
 	line : String;
-	i    : Integer;
+	i    : LongInt;
 begin
 	i := 0;
 	SetLength(pom, i);
@@ -136,7 +138,7 @@ begin
     begin
     	readln(fp, line);
     	L.DelimitedText := line;
-    	if (L[0] = 'set') and (L[1] = 'task') and (L[3] = 'that') and (L[4] = 'lasts') then 
+    	if (L[0] = 'add') and (L[1] = 'task') and (L[3] = 'that') and (L[4] = 'lasts') then 
     	begin
     		SetLength(pom, i+1);
     		pom[i] := buildTask(StrToInt(L[2]), StrToInt(L[5]));
@@ -148,6 +150,35 @@ begin
     db.Content := pom;
 	SetLength(pom, 0);
 	setTasks := db;
+end;
+
+function getComputersCount(filename : String) : LongInt;
+var
+	db   : TaskDB;
+	fp   : Text;
+	L    : TStrings;
+	line : String;
+	i    : LongInt;
+	ct   : LongInt;
+begin
+	i := 0;
+	ct := 0;
+	assignfile(fp, filename);
+    reset(fp);
+    L := TStringlist.Create;
+    L.Delimiter := ' ';
+    L.StrictDelimiter := false;
+    while not eof(fp) do
+    begin
+    	readln(fp, line);
+    	L.DelimitedText := line;
+    	if (L[0] = 'use') and (L[1] = 'unlimited') and (L[2] = 'number') and (L[3] = 'of') and (L[4] = 'computers') then ct := 0;
+    	if (L[0] = 'use') and (L[1] = '1') and (L[2] = 'computer') then ct := 1;
+    	if (L[0] = 'use') and (L[2] = 'computers') then ct := StrToInt(L[1]);
+    end;
+    L.Free;
+    closefile(fp);
+	getComputersCount := ct;
 end;
 
 procedure buildDependencies(var db : TaskDB; filename : String);
@@ -167,10 +198,10 @@ begin
     begin
     	readln(fp, line);
     	L.DelimitedText := line;
-    	if (L[0] = 'make') and (L[2] = 'dependent') and (L[3] = 'on') then 
+    	if (L[0] = 'make') and (L[1] = 'task') and (L[3] = 'dependent') and (L[4] = 'on') and (L[5] = 'task') then 
     	begin
-    		destination := getTaskByID(db, StrToInt(L[1]));
-    		origin := getTaskByID(db, StrToInt(L[4]));
+    		destination := getTaskByID(db, StrToInt(L[2]));
+    		origin := getTaskByID(db, StrToInt(L[6]));
     		addDependency(destination, origin);
     		replaceTaskByID(db, destination);
     		replaceTaskByID(db, origin);
@@ -233,15 +264,12 @@ var
 	s   : LongInt;
 begin
 	SetLength(tab, Length(tk.PrecTasks));
-	write('Task id ', tk.id, ' has [');
 	for i := 0 to Length(tk.PrecTasks)-1 do
 	begin
 		pom := getTaskByID(db, tk.PrecTasks[i]);
 		tab[i] := pom.ExecutionTime + pom.AvailabilityTime;
-		write(' ', tab[i]);
 	end; 
 	s := table_max(tab);
-	writeln(' ] and its max is ', s);
 	SetLength(tab, 0);
 	findCriticalPath := s;
 end;
@@ -261,7 +289,6 @@ begin
 		j := getTaskDBLocation(db, i);
 		if Length(db.Content[j].PrecTasks) = 0 then 
 		begin
-			//db.Content[j].AvailabilityTime := db.Content[j].ExecutionTime;
 			db.Content[j].AvailabilityTime := 0;
 			maxs[j] := db.Content[j].ExecutionTime; 
 		end else begin
@@ -270,6 +297,13 @@ begin
 		end;
 	end;
 	applyCPM := table_max(maxs);
+end;
+
+// ========== Schedule Generation
+
+procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);  
+begin
+	writeln(cpucount);
 end;
 
 end.

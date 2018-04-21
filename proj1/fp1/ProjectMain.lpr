@@ -9,16 +9,18 @@ uses
   Classes, UnitTask, SysUtils;
 
 var
-	db   : TaskDB;
-	maxl : LongInt;
-
+	db      : TaskDB;
+	maxl    : LongInt;
+	pcCount : LongInt; 
 begin
+	pcCount := getComputersCount(ParamStr(1));
 	db := loadDBFromFile(ParamStr(1));
 	printDBContent(db);
 	maxl := applyCPM(db);
-	writeln(maxl);
 	printDBContent(db);
-	//buildSchedule(db, maxl);
+	buildSchedule(db, maxl, pcCount);
 	dropDB(db);
 end.
 
+// Author: Paul Lipkowski, University of Gdańsk
+// Param 1 : Text file for a database with the information about the tasks, dependencies and the count of CPUs used
