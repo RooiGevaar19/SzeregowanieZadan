@@ -16,6 +16,7 @@ begin
 	db := loadDBFromFile(ParamStr(1));
 	printDBContent(db);
 	maxl := applyCPM(db);
+	writeln(maxl);
 	printDBContent(db);
 	//buildSchedule(db, maxl);
 	dropDB(db);

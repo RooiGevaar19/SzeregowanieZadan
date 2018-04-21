@@ -43,7 +43,7 @@ var
 begin
 	s := tab[0];
 	for i := 1 to Length(tab)-1 do
-		if (tab[i] < tab[i-1]) then s := tab[i];
+		if (tab[i] < s) then s := tab[i];
 	table_min := s;
 end;
 
@@ -54,7 +54,7 @@ var
 begin
 	s := tab[0];
 	for i := 1 to Length(tab)-1 do
-  		if (tab[i] > tab[i-1]) then s := tab[i]; 
+  		if (tab[i] > s) then s := tab[i]; 
   	table_max := s;
 end;
 
@@ -211,6 +211,7 @@ begin
 			ava := '';
 		end else begin
 			if (tk.AvailabilityTime = 0) then ava := ' and begins immediately at best'
+			//if (tk.AvailabilityTime = tk.ExecutionTime) then ava := ' and begins immediately at best'
 			else ava := ' and begins at ' + IntToStr(tk.AvailabilityTime) + ' at best';
 		end;
 		writeln(StdErr, 'The task ', tk.id, ' lasts ', tk.ExecutionTime, dep, ava,'.');
@@ -232,12 +233,15 @@ var
 	s   : LongInt;
 begin
 	SetLength(tab, Length(tk.PrecTasks));
+	write('Task id ', tk.id, ' has [');
 	for i := 0 to Length(tk.PrecTasks)-1 do
 	begin
 		pom := getTaskByID(db, tk.PrecTasks[i]);
-		tab[i] := tk.ExecutionTime + pom.AvailabilityTime;
+		tab[i] := pom.ExecutionTime + pom.AvailabilityTime;
+		write(' ', tab[i]);
 	end; 
 	s := table_max(tab);
+	writeln(' ] and its max is ', s);
 	SetLength(tab, 0);
 	findCriticalPath := s;
 end;
@@ -257,6 +261,7 @@ begin
 		j := getTaskDBLocation(db, i);
 		if Length(db.Content[j].PrecTasks) = 0 then 
 		begin
+			//db.Content[j].AvailabilityTime := db.Content[j].ExecutionTime;
 			db.Content[j].AvailabilityTime := 0;
 			maxs[j] := db.Content[j].ExecutionTime; 
 		end else begin
