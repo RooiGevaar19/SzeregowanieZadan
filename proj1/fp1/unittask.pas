@@ -4,6 +4,10 @@ unit UnitTask;
 
 interface
 
+const
+	GraphImageSizeX = 1000;
+	GraphImageSizeY = 1000;
+
 type
 	Task = record 
 	id               : LongInt;          // identyfikator
@@ -11,6 +15,8 @@ type
 	AvailabilityTime : LongInt;          // minimalny czas dostępności (algorytm go uzupełni)
 	CommenceTime     : LongInt;          // czas faktyczny wykonania (j.w.)
 	AssignedMachine  : LongInt;          // przypisana maszyna (j.w.)
+	GraphPosX        : LongInt;
+	GraphPosY        : LongInt;
 	PrecTasks        : array of LongInt; // wymagane taski
 	NextTasks        : array of LongInt; // taski wychodzące
 end;
@@ -70,6 +76,9 @@ begin
 	pom.ExecutionTime := execution_time;
 	pom.AvailabilityTime := -1;
 	pom.CommenceTime := -1;
+	pom.AssignedMachine := -2;
+	pom.GraphPosX := -1;
+	pom.GraphPosY := -1;
 	SetLength(pom.PrecTasks, 0);
 	SetLength(pom.NextTasks, 0);
 	buildTask := pom;
@@ -154,7 +163,6 @@ end;
 
 function getComputersCount(filename : String) : LongInt;
 var
-	db   : TaskDB;
 	fp   : Text;
 	L    : TStrings;
 	line : String;
@@ -224,6 +232,7 @@ end;
 procedure printDBContent(db : TaskDB);
 var
 	dep, ava : String;
+	com, ass : String;
 	tk       : Task;
 	i        : LongInt;
 begin
@@ -245,7 +254,19 @@ begin
 			//if (tk.AvailabilityTime = tk.ExecutionTime) then ava := ' and begins immediately at best'
 			else ava := ' and begins at ' + IntToStr(tk.AvailabilityTime) + ' at best';
 		end;
-		writeln(StdErr, 'The task ', tk.id, ' lasts ', tk.ExecutionTime, dep, ava,'.');
+		if (tk.CommenceTime = -1) then
+		begin
+			com := '';
+		end else begin
+			com := ', but in fact it begins at '+IntToStr(tk.CommenceTime);
+		end;
+		if (tk.AssignedMachine = -2) then
+		begin
+			ass := '';
+		end else begin
+			ass := '. This task is assigned to a machine no. '+IntToStr(tk.AssignedMachine);
+		end;
+		writeln(StdErr, 'The task ', tk.id, ' lasts ', tk.ExecutionTime, dep, ava, com, ass, '.');
 	end;
 end;
 
@@ -302,8 +323,77 @@ end;
 // ========== Schedule Generation
 
 procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);  
+var
+	sched        : array of array of Integer;
+	i, j         : LongInt;
+	index, jndex : LongInt;
+	assigned     : Boolean;
+	cursor       : LongInt;
+	usedcpus     : LongInt;
 begin
-	writeln(cpucount);
+	SetLength(sched, 0, 0);
+	if (cpucount <= 0) then // whether a count of CPUs is unbounded
+	begin
+		usedcpus := 1;
+		SetLength(sched, usedcpus, maxl);
+		for i := 0 to maxl-1 do 
+			sched[usedcpus-1][i] := 0;
+
+		//for tk in db.Content do 
+		for index := 0 to Length(db.Content) do
+		begin
+			jndex := getTaskDBLocation(db, index);
+			assigned := false;
+			cursor := db.Content[jndex].AvailabilityTime;
+			for i := 0 to usedcpus-1 do 
+				if (sched[i][cursor] = 0) then
+				begin
+					for j := 0 to db.Content[jndex].ExecutionTime-1 do sched[i][cursor+j] := 1;
+					db.Content[jndex].CommenceTime := cursor;
+					db.Content[jndex].AssignedMachine := i+1;
+					assigned := true;
+					break;
+				end; 
+			if not assigned then
+			begin
+				Inc(usedcpus);
+				SetLength(sched, usedcpus, maxl);
+				for i := 0 to maxl-1 do 
+					sched[usedcpus-1][i] := 0;
+
+				for j := 0 to db.Content[jndex].ExecutionTime-1 do sched[usedcpus-1][cursor+j] := 1;
+				db.Content[jndex].CommenceTime := cursor;
+				db.Content[jndex].AssignedMachine := usedcpus;
+				assigned := true;
+			end;
+		end;
+	end else begin // or is fixed
+		SetLength(sched, cpucount, maxl);
+		for i := 0 to cpucount-1 do 
+			for j := 0 to maxl-1 do 
+				sched[i][j] := 0;
+
+		for index := 0 to Length(db.Content) do
+		begin
+			jndex := getTaskDBLocation(db, index);
+			assigned := false;
+			cursor := db.Content[jndex].AvailabilityTime;
+			repeat
+				for i := 0 to cpucount-1 do 
+					if (sched[i][cursor] = 0) then
+					begin
+						for j := 0 to db.Content[jndex].ExecutionTime-1 do sched[i][cursor+j] := 1;
+						db.Content[jndex].CommenceTime := cursor;
+						db.Content[jndex].AssignedMachine := i+1;
+						assigned := true;
+						break;
+					end; 
+				Inc(cursor);
+				if (cursor = maxl) then break;
+			until assigned;
+		end;
+	end;
+	SetLength(sched, 0, 0);
 end;
 
 end.

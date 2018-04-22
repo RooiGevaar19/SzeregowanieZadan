@@ -19,6 +19,7 @@ begin
 	maxl := applyCPM(db);
 	printDBContent(db);
 	buildSchedule(db, maxl, pcCount);
+	printDBContent(db);
 	dropDB(db);
 end.
 
