@@ -23,19 +23,21 @@ end;
 
 type
 	TaskDB = record
-	Content : array of Task;
+	Content            : array of Task;
+	MachinesCount      : LongInt;
 end;
 
 function getTaskDBLocation(db : TaskDB; id : LongInt) : LongInt;  
 function getTaskByID(db : TaskDB; id : LongInt) : Task;       
 procedure replaceTaskByID(var db : TaskDB; newtask : Task);
-function loadDBFromFile(filename : String) : TaskDB;
+function loadDBFromFile(filename : String; cpucount : LongInt) : TaskDB;
 function getComputersCount(filename : String) : LongInt;
 procedure printDBContent(db : TaskDB);
 procedure dropDB(var db : TaskDB);
 function findCriticalPath(var db : TaskDB; var tk : Task) : LongInt;        
 function applyCPM(var db : TaskDB) : LongInt; 
-procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);                       
+procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);
+procedure drawSchedule(db : TaskDB; maxl : LongInt; filename : String);                       
 
 implementation
 
@@ -127,7 +129,7 @@ begin
 	db.Content[getTaskDBLocation(db, newtask.id)] := newtask;
 end;
 
-function setTasks(filename : String) : TaskDB;
+function setTasks(filename : String; cpucount : LongInt) : TaskDB;
 var
 	db   : TaskDB;
 	pom  : array of Task;
@@ -157,6 +159,7 @@ begin
     L.Free;
     closefile(fp);
     db.Content := pom;
+    db.MachinesCount := cpucount;
 	SetLength(pom, 0);
 	setTasks := db;
 end;
@@ -220,11 +223,11 @@ begin
 end;
 
 
-function loadDBFromFile(filename : String) : TaskDB;
+function loadDBFromFile(filename : String; cpucount : LongInt) : TaskDB;
 var
 	db : TaskDB;
 begin
-	db := setTasks(filename);
+	db := setTasks(filename, cpucount);
 	buildDependencies(db, filename);
 	loadDBFromFile := db;
 end;
@@ -266,7 +269,7 @@ begin
 		end else begin
 			ass := '. This task is assigned to a machine no. '+IntToStr(tk.AssignedMachine);
 		end;
-		writeln(StdErr, 'The task ', tk.id, ' lasts ', tk.ExecutionTime, dep, ava, com, ass, '.');
+		writeln('The task ', tk.id, ' lasts ', tk.ExecutionTime, dep, ava, com, ass, '.');
 	end;
 end;
 
@@ -367,6 +370,7 @@ begin
 				assigned := true;
 			end;
 		end;
+		db.MachinesCount := usedcpus;
 	end else begin // or is fixed
 		SetLength(sched, cpucount, maxl);
 		for i := 0 to cpucount-1 do 
@@ -394,6 +398,46 @@ begin
 		end;
 	end;
 	SetLength(sched, 0, 0);
+end;
+
+procedure drawSchedule(db : TaskDB; maxl : LongInt; filename : String);   
+var
+	fp           : Text;
+	schedSizeX   : LongInt; 
+	schedSizeY   : LongInt;
+	i            : LongInt;
+	CPUCount     : LongInt;
+	tk           : Task;
+	TaskX, TaskY : LongInt;
+	TaskLength   : LongInt;
+begin
+	CPUCount := db.MachinesCount;
+	schedSizeX := maxl*100 + 200;
+	schedSizeY := CPUCount*100 + 200;
+	assignfile(fp, filename);
+    rewrite(fp);
+    writeln(fp, '<svg xmlns="http://www.w3.org/2000/svg" width="',schedSizeX,'" height="',schedSizeY,'" viewBox="0 0 ',schedSizeX,' ',schedSizeY,'">');
+    writeln(fp, '<rect width="',schedSizeX,'" height="',schedSizeY,'" style="fill:rgb(255,255,255);stroke-width:0;stroke:rgb(0,0,0)" />');
+    writeln(fp, '<text x="20" y="50" font-family="Verdana" font-size="25" style="font-weight:bold">CPU</text>');
+    writeln(fp, '<text x="10" y="',CPUCount*100+150,'" font-family="Verdana" font-size="25" style="font-weight:bold">Czas</text>');
+    for i := 1 to CPUCount do 
+    	writeln(fp, '<text x="40" y="',i*100+50,'" font-family="Verdana" font-size="25">',i,'</text>');
+    for i := 0 to maxl do
+    begin
+    	writeln(fp, '<text x="',i*100+100,'" y="',CPUCount*100+150,'" font-family="Verdana" font-size="20">',i,'</text>');
+    	writeln(fp, '<line x1="',i*100+100,'" y1="80" x2="',i*100+100,'" y2="',CPUCount*100+120,'" style="stroke:rgb(0,0,0);stroke-width:1" />');
+    end;
+    for tk in db.Content do 
+    begin
+    	TaskX := tk.CommenceTime*100+100;
+    	TaskY := tk.AssignedMachine*100;
+    	TaskLength := tk.ExecutionTime*100;
+    	writeln(fp, '<rect x="',TaskX,'" y="',TaskY,'" width="',TaskLength,'" height="100" style="fill:rgb(128,128,255);stroke-width:2;stroke:rgb(0,0,0)" />');
+    	writeln(fp, '<text x="',TaskX+10,'" y="',TaskY+60,'" font-family="Verdana" font-size="18" fill="white">Task ',tk.id,'</text>');
+    end; 
+    writeln(fp, '</svg>');
+    closefile(fp);
+	writeln('A schedule image generated as the file ', filename, '');
 end;
 
 end.

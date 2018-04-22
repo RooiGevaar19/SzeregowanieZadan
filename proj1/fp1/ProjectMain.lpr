@@ -14,12 +14,13 @@ var
 	pcCount : LongInt; 
 begin
 	pcCount := getComputersCount(ParamStr(1));
-	db := loadDBFromFile(ParamStr(1));
+	db := loadDBFromFile(ParamStr(1), pcCount);
 	printDBContent(db);
 	maxl := applyCPM(db);
 	printDBContent(db);
 	buildSchedule(db, maxl, pcCount);
 	printDBContent(db);
+	drawSchedule(db, maxl, 'Harmonogram.svg'); 
 	dropDB(db);
 end.
 
