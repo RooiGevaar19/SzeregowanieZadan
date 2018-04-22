@@ -21,6 +21,7 @@ begin
 	buildSchedule(db, maxl, pcCount);
 	printDBContent(db);
 	drawSchedule(db, maxl, 'Harmonogram.svg'); 
+	drawGraph(db, 'Graf.svg');
 	dropDB(db);
 end.
 

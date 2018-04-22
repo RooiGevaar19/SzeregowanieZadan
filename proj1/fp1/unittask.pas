@@ -4,10 +4,6 @@ unit UnitTask;
 
 interface
 
-const
-	GraphImageSizeX = 1000;
-	GraphImageSizeY = 1000;
-
 type
 	Task = record 
 	id               : LongInt;          // identyfikator
@@ -23,26 +19,23 @@ end;
 
 type
 	TaskDB = record
-	Content            : array of Task;
-	MachinesCount      : LongInt;
+	Content       : array of Task;
+	MachinesCount : LongInt;
 end;
 
-function getTaskDBLocation(db : TaskDB; id : LongInt) : LongInt;  
-function getTaskByID(db : TaskDB; id : LongInt) : Task;       
-procedure replaceTaskByID(var db : TaskDB; newtask : Task);
 function loadDBFromFile(filename : String; cpucount : LongInt) : TaskDB;
 function getComputersCount(filename : String) : LongInt;
 procedure printDBContent(db : TaskDB);
-procedure dropDB(var db : TaskDB);
-function findCriticalPath(var db : TaskDB; var tk : Task) : LongInt;        
+procedure dropDB(var db : TaskDB);      
 function applyCPM(var db : TaskDB) : LongInt; 
 procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);
-procedure drawSchedule(db : TaskDB; maxl : LongInt; filename : String);                       
+procedure drawSchedule(db : TaskDB; maxl : LongInt; filename : String); 
+procedure drawGraph(db : TaskDB; filename : String);                       
 
 implementation
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, Math;
 
 // ========== Utils
 
@@ -169,10 +162,8 @@ var
 	fp   : Text;
 	L    : TStrings;
 	line : String;
-	i    : LongInt;
 	ct   : LongInt;
 begin
-	i := 0;
 	ct := 0;
 	assignfile(fp, filename);
     reset(fp);
@@ -418,10 +409,10 @@ begin
     rewrite(fp);
     writeln(fp, '<svg xmlns="http://www.w3.org/2000/svg" width="',schedSizeX,'" height="',schedSizeY,'" viewBox="0 0 ',schedSizeX,' ',schedSizeY,'">');
     writeln(fp, '<rect width="',schedSizeX,'" height="',schedSizeY,'" style="fill:rgb(255,255,255);stroke-width:0;stroke:rgb(0,0,0)" />');
-    writeln(fp, '<text x="20" y="50" font-family="Verdana" font-size="25" style="font-weight:bold">CPU</text>');
+    //writeln(fp, '<text x="20" y="50" font-family="Verdana" font-size="25" style="font-weight:bold">CPU</text>');
     writeln(fp, '<text x="10" y="',CPUCount*100+150,'" font-family="Verdana" font-size="25" style="font-weight:bold">Czas</text>');
     for i := 1 to CPUCount do 
-    	writeln(fp, '<text x="40" y="',i*100+50,'" font-family="Verdana" font-size="25">',i,'</text>');
+    	writeln(fp, '<text x="10" y="',i*100+55,'" font-family="Verdana" font-size="20">CPU ',i,'</text>');
     for i := 0 to maxl do
     begin
     	writeln(fp, '<text x="',i*100+100,'" y="',CPUCount*100+150,'" font-family="Verdana" font-size="20">',i,'</text>');
@@ -437,7 +428,70 @@ begin
     end; 
     writeln(fp, '</svg>');
     closefile(fp);
-	writeln('A schedule image generated as the file ', filename, '');
+	writeln('A schedule image has been generated to the file "', filename, '".');
+end;
+
+procedure drawGraph(db : TaskDB; filename : String); 
+var
+	fp           : Text;
+	schedSizeX   : LongInt; 
+	schedSizeY   : LongInt;
+	i            : LongInt;
+	MiddleX      : LongInt;
+	MiddleY      : LongInt;
+	tk, tl       : Task;
+	TaskX, TaskY : LongInt;
+	atan         : Extended;
+	angle        : LongInt;
+	posX, posY   : LongInt;
+begin
+	schedSizeX := 1000;
+	schedSizeY := 1000;
+	MiddleX := schedSizeX div 2;
+	MiddleY := schedSizeY div 2;
+
+	for i := 0 to Length(db.Content)-1 do
+	begin
+		db.Content[i].GraphPosX := MiddleX - trunc((MiddleX-150)*(cos(i/(Length(db.Content)) *2*pi()+0.1)));
+		db.Content[i].GraphPosY := MiddleY - trunc((MiddleY-150)*(sin(i/(Length(db.Content)) *2*pi()+0.1)));
+	end;
+
+	assignfile(fp, filename);
+    rewrite(fp);
+    writeln(fp, '<svg xmlns="http://www.w3.org/2000/svg" width="',schedSizeX,'" height="',schedSizeY,'" viewBox="0 0 ',schedSizeX,' ',schedSizeY,'">');
+    writeln(fp, '<rect width="',schedSizeX,'" height="',schedSizeY,'" style="fill:rgb(255,255,255);stroke-width:0;stroke:rgb(0,0,0)" />');
+
+    for tk in db.Content do 
+    begin
+    	for i := 0 to Length(tk.PrecTasks)-1 do 
+    	begin
+    		tl := getTaskByID(db, tk.PrecTasks[i]);
+    		atan := (1.0 * tk.GraphPosX - tl.GraphPosX)/(1.0 * tk.GraphPosY - tl.GraphPosY);
+    		angle := trunc(radtodeg(arctan(atan))) - 90;
+    		if (angle < 0) then angle := 360 - angle;
+    		writeln(fp, '<line x1="',tk.GraphPosX,'" y1="',tk.GraphPosY,'" x2="',tl.GraphPosX,'" y2="',tl.GraphPosY,'" style="stroke:rgb(0,0,0);stroke-width:2" />');
+    		if (tk.GraphPosY < tl.GraphPosY) then
+    			writeln(fp, '<polygon points="2,7 0,0 11,7 0,14" transform="translate(',tk.GraphPosX+trunc(50*cos(degtorad(angle))),' ',tk.GraphPosY+trunc(50*sin(degtorad(angle))),') rotate(',angle+180,' 0 0) translate(-2 -7)" stroke="black" fill="black" />')
+    		else
+    			writeln(fp, '<polygon points="2,7 0,0 11,7 0,14" transform="translate(',tk.GraphPosX-trunc(50*cos(degtorad(angle))),' ',tk.GraphPosY-trunc(50*sin(degtorad(angle))),') rotate(',angle,' 0 0) translate(-2 -7)" stroke="black" fill="black" />');
+    
+    	end;
+    end; 
+
+    for i := 0 to Length(db.Content)-1 do 
+    begin
+    	tk := db.Content[i];
+    	if (i*4 < (Length(db.Content))) or (i*4.0/3 > (Length(db.Content))) then posX := tk.GraphPosX-130
+    	else posX := tk.GraphPosX+30;
+    	if (i*2 < (Length(db.Content))) then posY := tk.GraphPosY-50
+    	else posY := tk.GraphPosY+60;
+    	writeln(fp, '<circle cx="',tk.GraphPosX,'" cy="',tk.GraphPosY,'" r="40" stroke="black" stroke-width="3" fill="#008844" />');
+    	writeln(fp, '<text x="',posX,'" y="',posY,'" font-family="Verdana" font-size="24" fill="black">Task ',tk.id,'</text>');
+    	writeln(fp, '<text x="',tk.GraphPosX-10,'" y="',tk.GraphPosY+10,'" font-family="Verdana" font-size="24" fill="white">',tk.ExecutionTime,'</text>');
+    end; 
+    writeln(fp, '</svg>');
+    closefile(fp);
+	writeln('A graph image has been generated to the file "', filename, '".');
 end;
 
 end.
