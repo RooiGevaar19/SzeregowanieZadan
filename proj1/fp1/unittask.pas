@@ -28,7 +28,7 @@ function getComputersCount(filename : String) : LongInt;
 procedure printDBContent(db : TaskDB);
 procedure dropDB(var db : TaskDB);      
 function applyCPM(var db : TaskDB) : LongInt; 
-procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);
+function buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt) : LongInt;  
 procedure drawSchedule(db : TaskDB; maxl : LongInt; filename : String); 
 procedure drawGraph(db : TaskDB; filename : String);                       
 
@@ -316,7 +316,7 @@ end;
 
 // ========== Schedule Generation
 
-procedure buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt);  
+function buildSchedule(var db : TaskDB; maxl : LongInt; cpucount : LongInt) : LongInt;  
 var
 	sched        : array of array of Integer;
 	i, j         : LongInt;
@@ -324,8 +324,12 @@ var
 	assigned     : Boolean;
 	cursor       : LongInt;
 	usedcpus     : LongInt;
+	s, xsize     : LongInt;
+	maxs         : array of LongInt;
 begin
 	SetLength(sched, 0, 0);
+	SetLength(maxs, Length(db.Content));
+	xsize := maxl;
 	if (cpucount <= 0) then // whether a count of CPUs is unbounded
 	begin
 		usedcpus := 1;
@@ -354,7 +358,6 @@ begin
 				SetLength(sched, usedcpus, maxl);
 				for i := 0 to maxl-1 do 
 					sched[usedcpus-1][i] := 0;
-
 				for j := 0 to db.Content[jndex].ExecutionTime-1 do sched[usedcpus-1][cursor+j] := 1;
 				db.Content[jndex].CommenceTime := cursor;
 				db.Content[jndex].AssignedMachine := usedcpus;
@@ -363,20 +366,25 @@ begin
 		end;
 		db.MachinesCount := usedcpus;
 	end else begin // or is fixed
-		SetLength(sched, cpucount, maxl);
+		SetLength(sched, cpucount, xsize);
 		for i := 0 to cpucount-1 do 
 			for j := 0 to maxl-1 do 
 				sched[i][j] := 0;
 
-		for index := 0 to Length(db.Content) do
+		for index := 1 to Length(db.Content) do
 		begin
 			jndex := getTaskDBLocation(db, index);
 			assigned := false;
 			cursor := db.Content[jndex].AvailabilityTime;
 			repeat
 				for i := 0 to cpucount-1 do 
-					if (sched[i][cursor] = 0) then
+					if (sched[i][cursor] <> 1) then
 					begin
+						if (cursor + db.Content[jndex].ExecutionTime > xsize) then 
+						begin
+							xsize := cursor + db.Content[jndex].ExecutionTime;
+							SetLength(sched, cpucount, xsize);
+						end;
 						for j := 0 to db.Content[jndex].ExecutionTime-1 do sched[i][cursor+j] := 1;
 						db.Content[jndex].CommenceTime := cursor;
 						db.Content[jndex].AssignedMachine := i+1;
@@ -384,11 +392,12 @@ begin
 						break;
 					end; 
 				Inc(cursor);
-				if (cursor = maxl) then break;
+				if (cursor = xsize) then break;
 			until assigned;
 		end;
 	end;
 	SetLength(sched, 0, 0);
+	buildSchedule := xsize;
 end;
 
 procedure drawSchedule(db : TaskDB; maxl : LongInt; filename : String);   

@@ -9,17 +9,19 @@ uses
   Classes, UnitTask, SysUtils;
 
 var
-	db      : TaskDB;
-	maxl    : LongInt;
-	pcCount : LongInt; 
+	db           : TaskDB;
+	criticalpath : LongInt;
+	maxl         : LongInt;
+	pcCount      : LongInt; 
 begin
 	pcCount := getComputersCount(ParamStr(1));
 	db := loadDBFromFile(ParamStr(1), pcCount);
 	printDBContent(db);
-	maxl := applyCPM(db);
+	criticalpath := applyCPM(db);
 	printDBContent(db);
-	buildSchedule(db, maxl, pcCount);
+	maxl := buildSchedule(db, criticalpath, pcCount);
 	printDBContent(db);
+	writeln(maxl);
 	drawSchedule(db, maxl, 'Harmonogram.svg'); 
 	drawGraph(db, 'Graf.svg');
 	dropDB(db);
