@@ -13,15 +13,20 @@ type
 	AssignedMachine  : LongInt;          // przypisana maszyna (j.w.)
 	GraphPosX        : LongInt;
 	GraphPosY        : LongInt;
-	PrecTasks        : array of LongInt; // wymagane taski
+	PrevTasks        : array of LongInt; // wymagane taski
 	NextTasks        : array of LongInt; // taski wychodzące
+	Visited          : Boolean;          // używane do sprawdzania cyklicznosci
 end;
 
 type
 	TaskDB = record
 	Content       : array of Task;
 	MachinesCount : LongInt;
+	HasCycles     : Boolean;
 end;
+
+type TTasks    = array of Task;
+type TLongInts = array of LongInt;
 
 function loadDBFromFile(filename : String; cpucount : LongInt) : TaskDB;
 function getComputersCount(filename : String) : LongInt;
@@ -61,6 +66,17 @@ begin
   	table_max := s;
 end;
 
+function table_empty(tab : array of LongInt) : Boolean;
+var
+	i : LongInt;
+	s : Boolean;
+begin
+	s := true;
+	for i := 0 to Length(tab)-1 do
+  		if (tab[i] <> -1) then s := false; 
+  	table_empty := s;
+end;
+
 // ========== DB Management
 
 function buildTask(id, execution_time : LongInt) : Task;
@@ -74,8 +90,9 @@ begin
 	pom.AssignedMachine := -2;
 	pom.GraphPosX := -1;
 	pom.GraphPosY := -1;
-	SetLength(pom.PrecTasks, 0);
+	SetLength(pom.PrevTasks, 0);
 	SetLength(pom.NextTasks, 0);
+	pom.Visited := false;
 	buildTask := pom;
 end;
 
@@ -83,15 +100,15 @@ procedure addDependency(var destination : Task; var origin : Task);
 var 
 	i, j : LongInt;
 begin
-	i := Length(destination.PrecTasks);
+	i := Length(destination.PrevTasks);
 	j := Length(origin.NextTasks);
-	SetLength(destination.PrecTasks, i+1);
+	SetLength(destination.PrevTasks, i+1);
 	SetLength(origin.NextTasks, j+1);
-	destination.PrecTasks[i] := origin.id;
-	origin.NextTasks[i] := destination.id;
+	destination.PrevTasks[i] := origin.id;
+	origin.NextTasks[j] := destination.id;
 end;
 
-function getTaskDBLocation(db : TaskDB; id : LongInt) : LongInt;
+function getTaskDBAddress(db : TaskDB; id : LongInt) : LongInt;
 var
 	found : Boolean;
 	index : LongInt;
@@ -108,18 +125,18 @@ begin
 		end;
 		Inc(index);
 	end;
-	if not (found) then getTaskDBLocation := -1
-	else getTaskDBLocation := index;
+	if not (found) then getTaskDBAddress := -1
+	else getTaskDBAddress := index;
 end;
 
 function getTaskByID(db : TaskDB; id : LongInt) : Task;
 begin
-	getTaskByID := db.Content[getTaskDBLocation(db, id)];
+	getTaskByID := db.Content[getTaskDBAddress(db, id)];
 end;
 
 procedure replaceTaskByID(var db : TaskDB; newtask : Task);
 begin
-	db.Content[getTaskDBLocation(db, newtask.id)] := newtask;
+	db.Content[getTaskDBAddress(db, newtask.id)] := newtask;
 end;
 
 function setTasks(filename : String; cpucount : LongInt) : TaskDB;
@@ -213,6 +230,126 @@ begin
     closefile(fp);
 end;
 
+function allVisited(db : TaskDB) : Boolean;
+var
+	tk : Task;
+	s  : Boolean;
+begin
+	s := true;
+	for tk in db.Content do 
+		if not (tk.Visited) then s := false;
+	allVisited := s;
+end;
+
+function table_allVisited(db : TTasks) : Boolean;
+var
+	tk : Task;
+	s  : Boolean;
+begin
+	s := true;
+	for tk in db do 
+		if not (tk.Visited) then s := false;
+	table_allVisited := s;
+end;
+
+function getAllNextTasks(db : TaskDB; tk : Task) : TTasks;
+var
+	pom   : TTasks;
+	i, j  : LongInt;
+	tl    : Task;
+begin
+	SetLength(pom, Length(tk.NextTasks));
+	j := 0;
+	for i in tk.NextTasks do 
+	begin
+		tl := getTaskByID(db, i);
+		pom[j] := tl;
+		j := j + 1; 
+	end;
+	getAllNextTasks := pom;
+end;
+
+function getAllIDs(db : TaskDB) : TLongInts;
+var
+	pom   : TLongInts;
+	i     : Task;
+	j     : LongInt;
+begin
+	SetLength(pom, Length(db.Content));
+	j := 0;
+	for i in db.Content do 
+	begin
+		pom[j] := i.id;
+		j := j + 1; 
+	end;
+	getAllIDs := pom;
+end;
+
+function getAllPrevTasks(db : TaskDB; tk : Task) : TTasks;
+var
+	pom   : TTasks;
+	i, j  : LongInt;
+	tl    : Task;
+begin
+	SetLength(pom, Length(tk.PrevTasks));
+	j := 0;
+	for i in tk.PrevTasks do 
+	begin
+		tl := getTaskByID(db, i);
+		pom[j] := tl;
+		j := j + 1; 
+	end;
+	getAllPrevTasks := pom;
+end;
+
+function hasCycles(var db : TaskDB) : Boolean;
+var
+	queue    : array of Task;
+	lcursor  : LongInt;
+	rcursor  : LongInt;
+	i, j, k  : LongInt;
+	index    : LongInt;
+	tk, tl   : Task;
+	tks, tls : TTasks;
+	answer   : Boolean;
+begin 
+	SetLength(queue, Length(db.Content));
+	lcursor := 0;
+	rcursor := 0;
+	for i := 0 to Length(db.Content)-1 do 
+		if Length(db.Content[i].PrevTasks) = 0 then 
+		begin
+			if (rcursor = Length(queue)) then SetLength(queue, rcursor+1);
+			db.Content[i].Visited := true;
+			queue[rcursor] := db.Content[i];
+			Inc(rcursor);
+		end;
+	//write('Queue: '); for k := 0 to Length(queue)-1 do write(queue[k].id,' '); writeln();
+
+	while (lcursor < rcursor) or (rcursor = Length(db.Content)-1) do
+	begin
+		//write('Queue: '); for k := 0 to Length(queue)-1 do write(queue[k].id,' '); writeln();
+		//writeln(lcursor, ' ', rcursor);
+		tk := queue[lcursor];
+		Inc(lcursor);
+		tks := getAllNextTasks(db, tk);
+		//write('Next: '); for k := 0 to Length(tks)-1 do write(tks[k].id,' '); writeln();
+		for tl in tks do
+		begin
+			if (table_allVisited(getAllPrevTasks(db, tl))) then
+			begin
+				index := getTaskDBAddress(db, tl.id);
+				if (rcursor = Length(queue)) then SetLength(queue, rcursor+1);
+				db.Content[index].Visited := true;
+				queue[rcursor] := db.Content[index];
+				Inc(rcursor);
+			end;
+		end;
+	end;
+	answer := not (allVisited(db)); 
+	SetLength(queue, 0);
+	hasCycles := answer;
+end;
 
 function loadDBFromFile(filename : String; cpucount : LongInt) : TaskDB;
 var
@@ -220,6 +357,13 @@ var
 begin
 	db := setTasks(filename, cpucount);
 	buildDependencies(db, filename);
+	if (hasCycles(db)) then 
+	begin
+		writeln('Warning! Contains cycles!');
+		db.HasCycles := true;
+	end else begin
+		db.HasCycles := false;
+	end;
 	loadDBFromFile := db;
 end;
 
@@ -232,12 +376,12 @@ var
 begin
 	for tk in db.Content do 
 	begin
-		if (Length(tk.PrecTasks) = 0) then 
+		if (Length(tk.PrevTasks) = 0) then 
 		begin
 			dep := ', is independent';
 		end else begin
 			dep := ', is dependent on [';
-			for i in tk.PrecTasks do dep := dep + ' ' + IntToStr(i); 
+			for i in tk.PrevTasks do dep := dep + ' ' + IntToStr(i); 
 			dep := dep + ' ]'
 		end;
 		if (tk.AvailabilityTime = -1) then 
@@ -278,10 +422,10 @@ var
 	tab : array of LongInt;
 	s   : LongInt;
 begin
-	SetLength(tab, Length(tk.PrecTasks));
-	for i := 0 to Length(tk.PrecTasks)-1 do
+	SetLength(tab, Length(tk.PrevTasks));
+	for i := 0 to Length(tk.PrevTasks)-1 do
 	begin
-		pom := getTaskByID(db, tk.PrecTasks[i]);
+		pom := getTaskByID(db, tk.PrevTasks[i]);
 		tab[i] := pom.ExecutionTime + pom.AvailabilityTime;
 	end; 
 	s := table_max(tab);
@@ -301,8 +445,8 @@ begin
 
 	for i in tab do 
 	begin
-		j := getTaskDBLocation(db, i);
-		if Length(db.Content[j].PrecTasks) = 0 then 
+		j := getTaskDBAddress(db, i);
+		if Length(db.Content[j].PrevTasks) = 0 then 
 		begin
 			db.Content[j].AvailabilityTime := 0;
 			maxs[j] := db.Content[j].ExecutionTime; 
@@ -325,22 +469,29 @@ var
 	cursor       : LongInt;
 	usedcpus     : LongInt;
 	s, xsize     : LongInt;
+	expanded     : Boolean;
 	maxs         : array of LongInt;
 begin
 	SetLength(sched, 0, 0);
 	SetLength(maxs, Length(db.Content));
 	xsize := maxl;
+	expanded := false;
 	if (cpucount <= 0) then // whether a count of CPUs is unbounded
 	begin
+		//writeln('lots of PCs');
 		usedcpus := 1;
 		SetLength(sched, usedcpus, maxl);
 		for i := 0 to maxl-1 do 
 			sched[usedcpus-1][i] := 0;
+		//writeln('OK');
 
 		//for tk in db.Content do 
-		for index := 0 to Length(db.Content) do
+		for index := 1 to Length(db.Content) do
 		begin
-			jndex := getTaskDBLocation(db, index);
+			//writeln('OK   ', index);
+			//writeln('CPUs ', usedcpus);
+			jndex := getTaskDBAddress(db, index);
+			//writeln('Index: ', jndex);
 			assigned := false;
 			cursor := db.Content[jndex].AvailabilityTime;
 			for i := 0 to usedcpus-1 do 
@@ -365,25 +516,31 @@ begin
 			end;
 		end;
 		db.MachinesCount := usedcpus;
+		//writeln('Done');
 	end else begin // or is fixed
 		SetLength(sched, cpucount, xsize);
 		for i := 0 to cpucount-1 do 
 			for j := 0 to maxl-1 do 
 				sched[i][j] := 0;
 
-		for index := 1 to Length(db.Content) do
+		//for index := 1 to Length(db.Content) do
+		for index in getAllIDs(db) do
 		begin
-			jndex := getTaskDBLocation(db, index);
+			//writeln(index);
+			jndex := getTaskDBAddress(db, index);
 			assigned := false;
 			cursor := db.Content[jndex].AvailabilityTime;
 			repeat
 				for i := 0 to cpucount-1 do 
 					if (sched[i][cursor] <> 1) then
 					begin
-						if (cursor + db.Content[jndex].ExecutionTime > xsize) then 
+						if (cursor + db.Content[jndex].ExecutionTime + 1 > xsize) then 
 						begin
-							xsize := cursor + db.Content[jndex].ExecutionTime;
+							//write(xsize);
+							xsize := cursor + db.Content[jndex].ExecutionTime + 1;
 							SetLength(sched, cpucount, xsize);
+							//writeln('expands to ', xsize);
+							expanded := true;
 						end;
 						for j := 0 to db.Content[jndex].ExecutionTime-1 do sched[i][cursor+j] := 1;
 						db.Content[jndex].CommenceTime := cursor;
@@ -397,6 +554,7 @@ begin
 		end;
 	end;
 	SetLength(sched, 0, 0);
+	if expanded then xsize := xsize - 1; 
 	buildSchedule := xsize;
 end;
 
@@ -461,8 +619,8 @@ begin
 
 	for i := 0 to Length(db.Content)-1 do
 	begin
-		db.Content[i].GraphPosX := MiddleX - trunc((MiddleX-150)*(cos(i/(Length(db.Content)) *2*pi()+0.1)));
-		db.Content[i].GraphPosY := MiddleY - trunc((MiddleY-150)*(sin(i/(Length(db.Content)) *2*pi()+0.1)));
+		db.Content[i].GraphPosX := MiddleX - trunc((MiddleX-150)*(cos(i/(Length(db.Content)) *2*pi()+0.05)));
+		db.Content[i].GraphPosY := MiddleY - trunc((MiddleY-150)*(sin(i/(Length(db.Content)) *2*pi()+0.05)));
 	end;
 
 	assignfile(fp, filename);
@@ -472,9 +630,9 @@ begin
 
     for tk in db.Content do 
     begin
-    	for i := 0 to Length(tk.PrecTasks)-1 do 
+    	for i := 0 to Length(tk.PrevTasks)-1 do 
     	begin
-    		tl := getTaskByID(db, tk.PrecTasks[i]);
+    		tl := getTaskByID(db, tk.PrevTasks[i]);
     		atan := (1.0 * tk.GraphPosX - tl.GraphPosX)/(1.0 * tk.GraphPosY - tl.GraphPosY);
     		angle := trunc(radtodeg(arctan(atan))) - 90;
     		if (angle < 0) then angle := 360 - angle;
