@@ -359,7 +359,7 @@ begin
 	buildDependencies(db, filename);
 	if (hasCycles(db)) then 
 	begin
-		writeln('Warning! Contains cycles!');
+		writeln('ERROR: Graph contains cyclic dependencies!');
 		db.HasCycles := true;
 	end else begin
 		db.HasCycles := false;
@@ -619,8 +619,8 @@ begin
 
 	for i := 0 to Length(db.Content)-1 do
 	begin
-		db.Content[i].GraphPosX := MiddleX - trunc((MiddleX-150)*(cos(i/(Length(db.Content)) *2*pi()+0.05)));
-		db.Content[i].GraphPosY := MiddleY - trunc((MiddleY-150)*(sin(i/(Length(db.Content)) *2*pi()+0.05)));
+		db.Content[i].GraphPosX := MiddleX - trunc((MiddleX-150)*(cos(i/(Length(db.Content)) *2*pi()+0.01)));
+		db.Content[i].GraphPosY := MiddleY - trunc((MiddleY-150)*(sin(i/(Length(db.Content)) *2*pi()+0.01)));
 	end;
 
 	assignfile(fp, filename);
