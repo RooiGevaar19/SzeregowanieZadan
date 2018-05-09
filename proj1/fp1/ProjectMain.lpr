@@ -26,7 +26,7 @@ begin
 			writeln('AFTER CPM APPLICATION:');
 			printDBContent(db);
 			writeln();
-			writeln('AFTER SCHEMA BUILD:');
+			writeln('AFTER SCHEDULE BUILD:');
 			maxl := buildSchedule(db, criticalpath, pcCount);
 			printDBContent(db);
 			writeln();

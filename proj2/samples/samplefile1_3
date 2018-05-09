@@ -1,0 +1,20 @@
+use 3 computers
+add task 1 that lasts 2
+add task 2 that lasts 3
+add task 3 that lasts 1
+add task 4 that lasts 2
+add task 5 that lasts 3
+add task 6 that lasts 1
+add task 7 that lasts 2
+add task 8 that lasts 6
+add task 9 that lasts 2
+add task 10 that lasts 1
+make task 5 dependent on task 1
+make task 5 dependent on task 2
+make task 6 dependent on task 2
+make task 6 dependent on task 3
+make task 6 dependent on task 4
+make task 7 dependent on task 5
+make task 7 dependent on task 6
+make task 8 dependent on task 6
+make task 9 dependent on task 7
