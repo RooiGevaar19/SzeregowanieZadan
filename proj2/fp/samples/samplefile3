@@ -7,8 +7,8 @@ add task 6 that lasts 1 arrives at 15 and is expected at 20
 add task 7 that lasts 2 arrives at 13 and is expected at 25
 make task 3 dependent on task 1
 make task 4 dependent on task 2
-make task 6 dependent on task 4
 make task 5 dependent on task 3
+make task 5 dependent on task 4
+make task 6 dependent on task 4
 make task 7 dependent on task 6
 make task 7 dependent on task 5
-make task 5 dependent on task 4

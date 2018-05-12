@@ -84,6 +84,11 @@ begin
   	table_empty := s;
 end;
 
+function max2(x, y : LongInt) : LongInt;
+begin
+	if (x > y) then max2 := x else max2 := y;
+end;
+
 // ========== DB Management
 
 function buildTask(id, execution_time, arrival_time, due_date : LongInt) : Task;
@@ -149,17 +154,29 @@ var
 	index : LongInt;
 	i     : Task;
 begin
-	index := 0;
 	found := false;
-	for i in db.Content do
+	//index := 0;
+	//for i in db.Content do
+	//begin
+	//	if (i.id = id) then 
+	//	begin
+	//		found := true;
+	//		break;
+	//	end;
+	//	Inc(index);
+	//end;
+
+	index := Length(db.Content)-1;
+	while index >= 0 do
 	begin
-		if (i.id = id) then 
+		if (db.Content[index].id = id) then
 		begin
 			found := true;
 			break;
 		end;
-		Inc(index);
+		Dec(index);
 	end;
+
 	if not (found) then getTaskDBAddress := -1
 	else getTaskDBAddress := index;
 end;
@@ -341,11 +358,11 @@ begin
 			Inc(j);
 		end;
 	end;
-	writeln('ctime = ', ctime);
-	for tl in pom do write(' ',tl.id);
-	writeln();
-	for tl in pom do write(' ',tl.AvailabilityTime);
-	writeln();
+	//writeln('ctime = ', ctime);
+	//for tl in pom do write(' ',tl.id);
+	//writeln();
+	//for tl in pom do write(' ',tl.AvailabilityTime);
+	//writeln();
 	getAvailableTasks := pom;
 end;
 
@@ -539,7 +556,7 @@ begin
 			db.Content[j].AvailabilityTime := 0;
 			maxs[j] := db.Content[j].ExecutionTime; 
 		end else begin
-			db.Content[j].AvailabilityTime := findCriticalPath(db, db.Content[j]);
+			db.Content[j].AvailabilityTime := max2(db.Content[j].ArrivalTime, findCriticalPath(db, db.Content[j]));
 			maxs[j] := db.Content[j].ExecutionTime + db.Content[j].AvailabilityTime; 
 		end;
 	end;
@@ -597,6 +614,7 @@ var
 	xd           : TLongInts;
 begin
 	criticalpath := applyCPM(db);
+	printDBContent(db);
 	latency := -TMAX;
 	table_unvisit(db.Content);
 	setModifiedDueDates(db);
@@ -613,6 +631,7 @@ begin
 			writeln(db.Content[IntEax].id);
 			db.Content[IntEax].Visited := true;
 			db.Content[IntEax].CommenceTime := TimeCursor;
+			db.Content[IntEax].AssignedMachine := 1;
 			Progress := 1;
 			while (Progress < db.Content[IntEax].ExecutionTime) do 
 			begin
@@ -783,6 +802,7 @@ begin
     	TaskX := tk.CommenceTime*100+100;
     	TaskY := tk.AssignedMachine*100;
     	TaskLength := tk.ExecutionTime*100;
+    	writeln('Task ',tk.id:3,': ', TaskX, ' ', TaskY, ' ', TaskLength);
     	writeln(fp, '<rect x="',TaskX,'" y="',TaskY,'" width="',TaskLength,'" height="100" style="fill:rgb(128,128,255);stroke-width:2;stroke:rgb(0,0,0)" />');
     	writeln(fp, '<text x="',TaskX+10,'" y="',TaskY+60,'" font-family="Verdana" font-size="18" fill="white">Task ',tk.id,'</text>');
     end; 
