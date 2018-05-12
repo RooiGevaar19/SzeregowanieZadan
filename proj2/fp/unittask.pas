@@ -13,6 +13,8 @@ type
 	AvailabilityTime : LongInt;          // minimalny czas dostępności (algorytm go uzupełni)
 	CommenceTime     : LongInt;          // czas faktyczny wykonania (j.w.)
 	AssignedMachine  : LongInt;          // przypisana maszyna (j.w.)
+	ArrivalTime      : LongInt;
+	FinishTime       : LongInt;
 	DueDate          : LongInt;
 	ModifiedDueDate  : LongInt;
 	GraphPosX        : LongInt;
@@ -20,6 +22,7 @@ type
 	PrevTasks        : array of LongInt; // wymagane taski
 	NextTasks        : array of LongInt; // taski wychodzące
 	Visited          : Boolean;          // używane do sprawdzania cyklicznosci i do sygnalizowania przerwań
+	RowID            : LongInt;
 end;
 
 type
@@ -83,13 +86,14 @@ end;
 
 // ========== DB Management
 
-function buildTask(id, execution_time, due_date : LongInt) : Task;
+function buildTask(id, execution_time, arrival_time, due_date : LongInt) : Task;
 var
 	pom : Task;
 begin
 	pom.id := id;
 	pom.ExecutionTime := execution_time;
 	pom.AvailabilityTime := -1;
+	pom.ArrivalTime := arrival_time;
 	pom.CommenceTime := -1;
 	pom.AssignedMachine := -2;
 	pom.DueDate := due_date;
@@ -100,26 +104,31 @@ begin
 	SetLength(pom.NextTasks, 0);
 	pom.Visited := false;
 	buildTask := pom;
+	pom.RowID := -1;
+	pom.FinishTime := -1;
 end;
 
-function buildFixedTask(id, execution_time, due_date, availability_time, modified_due_date : LongInt) : Task;
-var
-	pom : Task;
-begin
-	pom.id := id;
-	pom.ExecutionTime := execution_time;
-	pom.AvailabilityTime := availability_time;
-	pom.CommenceTime := -1;
-	pom.AssignedMachine := -2;
-	pom.DueDate := due_date;
-	pom.ModifiedDueDate := modified_due_date;
-	pom.GraphPosX := -1;
-	pom.GraphPosY := -1;
-	SetLength(pom.PrevTasks, 0);
-	SetLength(pom.NextTasks, 0);
-	pom.Visited := false;
-	buildFixedTask := pom;
-end;
+//function buildFixedTask(id, execution_time, due_date, arrival_time, modified_due_date : LongInt) : Task;
+//var
+//	pom : Task;
+//begin
+//	pom.id := id;
+//	pom.ExecutionTime := execution_time;
+//	pom.AvailabilityTime := -1;
+//	pom.ArrivalTime := arrival_time;
+//	pom.CommenceTime := -1;
+//	pom.AssignedMachine := -2;
+//	pom.DueDate := due_date;
+//	pom.ModifiedDueDate := modified_due_date;
+//	pom.GraphPosX := -1;
+//	pom.GraphPosY := -1;
+//	SetLength(pom.PrevTasks, 0);
+//	SetLength(pom.NextTasks, 0);
+//	pom.Visited := false;
+//	buildFixedTask := pom;
+//	pom.RowID := -1;
+//	pom.FinishTime := -1;
+//end;
 
 
 procedure addDependency(var destination : Task; var origin : Task);
@@ -191,7 +200,8 @@ begin
     	and (L[9] = 'and') and (L[10] = 'is') and (L[11] = 'expected') and (L[12] = 'at') then 
     	begin
     		SetLength(pom, i+1);
-    		pom[i] := buildTask(StrToInt(L[2]), StrToInt(L[5]), StrToInt(L[13]));
+    		pom[i] := buildTask(StrToInt(L[2]), StrToInt(L[5]), StrToInt(L[8]), StrToInt(L[13]));
+    		pom[i].RowID := i;
     		Inc(i);
     	end;
     end;
@@ -264,6 +274,28 @@ begin
 		db[i].Visited := false;
 end;
 
+function extractMostUrgent(tab : TTasks) : Task;
+var
+	pom, tk : Task;
+begin
+	pom := tab[0];
+	for tk in tab do 
+		if (tk.ModifiedDueDate < pom.ModifiedDueDate) then pom := tk;
+	extractMostUrgent := pom;
+end;
+
+function extractMostUrgentAddr(tab : TTasks) : LongInt;
+var
+	pom     : Task; 
+	tk, res : LongInt;
+begin
+	pom := tab[0];
+	res := tab[0].RowID;
+	for tk := 1 to Length(tab)-1 do 
+		if (tab[tk].ModifiedDueDate < pom.ModifiedDueDate) then res := tab[tk].RowID;
+	extractMostUrgentAddr := res;
+end;
+
 function getAllNextTasks(db : TaskDB; tk : Task) : TTasks;
 var
 	pom   : TTasks;
@@ -287,6 +319,7 @@ var
 begin
 	x := Length(db.Content);
 	SetLength(db.Content, x+1);
+	tk.RowID := x;
 	db.Content[x] := tk;
 end;
 
@@ -299,7 +332,9 @@ begin
 	j := 0;
 	for tl in db.Content do 
 	begin
-		if (tl.AvailabilityTime <= ctime) and (not (tl.Visited)) then
+		if (tl.AvailabilityTime <= ctime) 
+		and (tl.ArrivalTime <= ctime)
+		and (not (tl.Visited)) then
 		begin
 			SetLength(pom, j+1);
 			pom[j] := tl;
@@ -411,7 +446,7 @@ procedure printDBContent(db : TaskDB);
 var
 	dep, ava : String;
 	com, ass : String;
-	sch      : String;
+	sch, fin : String;
 	tk       : Task;
 	i        : LongInt;
 begin
@@ -427,9 +462,9 @@ begin
 		end;
 		if (tk.DueDate = -1) then
 		begin
-			sch := ', is expected to be finished at '+IntToStr(tk.DueDate);
-		end else begin
 			sch := '';
+		end else begin
+			sch := ', is expected to be finished at '+IntToStr(tk.DueDate);
 		end;
 		if (tk.AvailabilityTime = -1) then 
 		begin
@@ -445,13 +480,19 @@ begin
 		end else begin
 			com := ', but in fact it begins at '+IntToStr(tk.CommenceTime);
 		end;
+		if (tk.FinishTime = -1) then
+		begin
+			fin := '';
+		end else begin
+			fin := ' and finishes at '+IntToStr(tk.FinishTime);
+		end;
 		if (tk.AssignedMachine = -2) then
 		begin
 			ass := '';
 		end else begin
 			ass := '. This task is assigned to a machine no. '+IntToStr(tk.AssignedMachine);
 		end;
-		writeln('The task ', tk.id, ' lasts ', tk.ExecutionTime, sch, dep, ava, com, ass, '.');
+		writeln('The task ', tk.id, ' lasts ', tk.ExecutionTime, sch, dep, ava, com, fin, ass, '.');
 	end;
 end;
 
@@ -511,14 +552,13 @@ var
 	tk    : Task;
 	times : TLongInts;
 begin
-	for i := 0 to Length(db.Content) do 
+	for i := 0 to Length(db.Content)-1 do 
 	begin
 		j := 1;
 		SetLength(times, j);
 		times[0] := db.Content[i].DueDate;
 		for tk in getAllNextTasks(db, db.Content[i]) do
 		begin
-			//writeln('ok ', j);
 			SetLength(times, j);
 			times[j] := tk.DueDate;
 			Inc(j);
@@ -547,68 +587,68 @@ function applyLiu(var db : TaskDB) : LongInt;
 var
 	criticalpath : LongInt;
 	TimeCursor   : LongInt;
-	TimeCursor2  : LongInt;
-	commence     : LongInt;
-	TaskCursor   : Task;
-	address      : LongInt;
-	avtasks      : TTasks;
-	Interrupted  : Boolean;
+	TaskEax      : Task;
+	TaskEbx      : Task;
+	IntEax       : LongInt;
+	IntEbx       : LongInt;
+	Progress     : LongInt;
 	latency      : LongInt;
+	bonus        : LongInt;
+	xd           : TLongInts;
 begin
 	criticalpath := applyCPM(db);
 	latency := -TMAX;
 	table_unvisit(db.Content);
 	setModifiedDueDates(db);
-	sortByModifiedDueDate(db.Content);
+	//sortByModifiedDueDate(db.Content);
 	
 
-	address := 0;
-	TimeCursor := db.Content[address].AvailabilityTime;
+	TimeCursor := 0;
 	repeat
-		db.Content[address].AssignedMachine := 1;;
-		db.Content[address].CommenceTime := TimeCursor;
-		writeln('curs - ', TimeCursor);
-		writeln('id   - ', db.Content[address].id);
-		writeln('exec - ', db.Content[address].ExecutionTime);
-		Interrupted := false;
-		while (TimeCursor < db.Content[address].CommenceTime+db.Content[address].ExecutionTime) and (not (Interrupted)) do 
+		writeln('time: ', TimeCursor);
+		if Length(getAvailableTasks(db, TimeCursor)) > 0 then
 		begin
-			TimeCursor2 := TimeCursor-db.Content[address].CommenceTime;
-			avtasks := getAvailableTasks(db, TimeCursor);
-			if (Length(avtasks) <> 0) then
+			IntEax := extractMostUrgentAddr(getAvailableTasks(db, TimeCursor));
+			writeln(IntEax);
+			writeln(db.Content[IntEax].id);
+			db.Content[IntEax].Visited := true;
+			db.Content[IntEax].CommenceTime := TimeCursor;
+			Progress := 1;
+			while (Progress < db.Content[IntEax].ExecutionTime) do 
 			begin
-				writeln('time - ', TimeCursor2, ' ', avtasks[0].id);
-				if (avtasks[0].id <> db.Content[address].id) and (TimeCursor2 <> 0) then
-				begin 
-					TaskCursor := db.Content[address];
-					TaskCursor.AvailabilityTime := TimeCursor;
-					TaskCursor.ExecutionTime := db.Content[address].ExecutionTime - TimeCursor2;
-					db.Content[address].ExecutionTime := TimeCursor2;
-					writeln('appended: ', TaskCursor.id,' ', TaskCursor.ExecutionTime, ' ', TaskCursor.AvailabilityTime);
-					appendNewTaskToDB(db, TaskCursor);
-					sortByModifiedDueDate(db.Content);
-					Interrupted := true;
+				if Length(getAvailableTasks(db, TimeCursor+Progress)) > 0 then
+				begin
+					IntEbx := extractMostUrgentAddr(getAvailableTasks(db, TimeCursor+Progress));
+					if (db.Content[IntEbx].ModifiedDueDate < db.Content[IntEax].ModifiedDueDate)
+					and (db.Content[IntEbx].id <> db.Content[IntEax].id) 
+					then begin
+						TaskEax := db.Content[IntEax];
+						TaskEax.AvailabilityTime := TimeCursor+Progress+1;
+						TaskEax.ArrivalTime := TimeCursor+Progress+1;
+						TaskEax.ExecutionTime := db.Content[IntEax].ExecutionTime-Progress;
+						TaskEax.Visited := false;
+						appendNewTaskToDB(db, TaskEax);
+						db.Content[IntEax].ExecutionTime := Progress;
+						break;
+					end;
 				end;
+				Inc(Progress);
 			end;
-			if not (Interrupted) then 
-			begin
-				if (TimeCursor+1-db.Content[address].DueDate > latency) then
-					latency := TimeCursor+1-db.Content[address].DueDate;
-			end;
-			if (TimeCursor+1 = db.Content[address].CommenceTime+db.Content[address].ExecutionTime) then db.Content[address].Visited := true;
-			writeln(TimeCursor+1, ' ', db.Content[address].DueDate);
-			writeln(latency);
-			writeln();
+			if (TimeCursor+Progress-db.Content[IntEax].DueDate > latency) then
+				latency := TimeCursor+Progress-db.Content[IntEax].DueDate;
+			db.Content[IntEax].FinishTime := TimeCursor+Progress;
+			Inc(TimeCursor, Progress);
+		end else begin
 			Inc(TimeCursor);
 		end;
-		inc(address);
-		writeln();
-	until (address = Length(db.Content));
+	until allVisited(db);
+	//until TimeCursor = 20;
+
 
 	db.Latency := latency;
 
 	// done
-	applyLiu := TimeCursor;
+	applyLiu := TimeCursor+bonus;
 end;
 
 // ========== Schedule Generation

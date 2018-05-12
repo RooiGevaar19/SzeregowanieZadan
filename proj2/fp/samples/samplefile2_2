@@ -1,6 +1,6 @@
 add task 1 that lasts 1 arrives at 0 and is expected at 1
-add task 2 that lasts 2 arrives at 1 and is expected at 3
-add task 3 that lasts 3 arrives at 1 and is expected at 5
+add task 2 that lasts 3 arrives at 1 and is expected at 2
+add task 3 that lasts 3 arrives at 4 and is expected at 6
 add task 4 that lasts 1 arrives at 2 and is expected at 4
 add task 5 that lasts 2 arrives at 3 and is expected at 7
 add task 6 that lasts 3 arrives at 6 and is expected at 10
