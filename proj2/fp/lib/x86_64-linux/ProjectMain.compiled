@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CONFIG>
-  <Compiler Value="/usr/bin/fpc" Date="1454174389"/>
-  <Params Value=" -MObjFPC -Scghi -Cg -O1 -g -gl -l -vewnhibq -Fi/media/rooigevaar19/Media/Projects/studia/szeregowanie/proj2/fp/lib/x86_64-linux -Fu/media/rooigevaar19/Media/Projects/studia/szeregowanie/proj2/fp/ -FU/media/rooigevaar19/Media/Projects/studia/szeregowanie/proj2/fp/lib/x86_64-linux/ ProjectMain.lpr"/>
-</CONFIG>
