@@ -35,7 +35,7 @@ begin
 	except
 		on EInOutError do
 		writeln('File is not found or is corrupted.');
-		//on EAccessViolation do dropDB(db);
+		on EAccessViolation do dropDB(db);
 	end;
 end.
 

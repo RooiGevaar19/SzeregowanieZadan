@@ -23,6 +23,7 @@ type
 	NextTasks        : array of LongInt; // taski wychodzące
 	Visited          : Boolean;          // używane do sprawdzania cyklicznosci i do sygnalizowania przerwań
 	RowID            : LongInt;
+	ReadyToGo        : LongInt;          // sygnał ten daje możliwość wystartowania, jak wszystkie wymagane taski zostały wykonane (wtedy musi być równy 0, jak >0 to jeszcze są jakieś taski do wykonania)
 end;
 
 type
@@ -111,30 +112,8 @@ begin
 	buildTask := pom;
 	pom.RowID := -1;
 	pom.FinishTime := -1;
+	pom.ReadyToGo := 0;
 end;
-
-//function buildFixedTask(id, execution_time, due_date, arrival_time, modified_due_date : LongInt) : Task;
-//var
-//	pom : Task;
-//begin
-//	pom.id := id;
-//	pom.ExecutionTime := execution_time;
-//	pom.AvailabilityTime := -1;
-//	pom.ArrivalTime := arrival_time;
-//	pom.CommenceTime := -1;
-//	pom.AssignedMachine := -2;
-//	pom.DueDate := due_date;
-//	pom.ModifiedDueDate := modified_due_date;
-//	pom.GraphPosX := -1;
-//	pom.GraphPosY := -1;
-//	SetLength(pom.PrevTasks, 0);
-//	SetLength(pom.NextTasks, 0);
-//	pom.Visited := false;
-//	buildFixedTask := pom;
-//	pom.RowID := -1;
-//	pom.FinishTime := -1;
-//end;
-
 
 procedure addDependency(var destination : Task; var origin : Task);
 var 
@@ -155,16 +134,6 @@ var
 	i     : Task;
 begin
 	found := false;
-	//index := 0;
-	//for i in db.Content do
-	//begin
-	//	if (i.id = id) then 
-	//	begin
-	//		found := true;
-	//		break;
-	//	end;
-	//	Inc(index);
-	//end;
 
 	index := Length(db.Content)-1;
 	while index >= 0 do
@@ -184,6 +153,25 @@ end;
 function getTaskByID(db : TaskDB; id : LongInt) : Task;
 begin
 	getTaskByID := db.Content[getTaskDBAddress(db, id)];
+end;
+
+function getAllSubTasks(db : TaskDB; id : LongInt) : TTasks;
+var
+	pom : TTasks;
+	j   : LongInt;
+	tl  : Task;
+begin
+	j := 0;
+	for tl in db.Content do 
+	begin
+		if (id = tl.id) then
+		begin
+			SetLength(pom, j+1);
+			pom[j] := tl;
+			Inc(j);
+		end;
+	end;
+	getAllSubTasks := pom;
 end;
 
 procedure replaceTaskByID(var db : TaskDB; newtask : Task);
@@ -218,7 +206,9 @@ begin
     	begin
     		SetLength(pom, i+1);
     		pom[i] := buildTask(StrToInt(L[2]), StrToInt(L[5]), StrToInt(L[8]), StrToInt(L[13]));
+    		pom[i].ReadyToGo := 0;
     		pom[i].RowID := i;
+    		pom[i].FinishTime := -1;
     		Inc(i);
     	end;
     end;
@@ -253,6 +243,7 @@ begin
     		destination := getTaskByID(db, StrToInt(L[2]));
     		origin := getTaskByID(db, StrToInt(L[6]));
     		addDependency(destination, origin);
+			Inc(destination.ReadyToGo);
     		replaceTaskByID(db, destination);
     		replaceTaskByID(db, origin);
     	end;
@@ -351,6 +342,7 @@ begin
 	begin
 		if (tl.AvailabilityTime <= ctime) 
 		and (tl.ArrivalTime <= ctime)
+		and (tl.ReadyToGo <= 0)
 		and (not (tl.Visited)) then
 		begin
 			SetLength(pom, j+1);
@@ -358,11 +350,6 @@ begin
 			Inc(j);
 		end;
 	end;
-	//writeln('ctime = ', ctime);
-	//for tl in pom do write(' ',tl.id);
-	//writeln();
-	//for tl in pom do write(' ',tl.AvailabilityTime);
-	//writeln();
 	getAvailableTasks := pom;
 end;
 
@@ -446,6 +433,7 @@ end;
 function loadDBFromFile(filename : String) : TaskDB;
 var
 	db : TaskDB;
+	TaskEbx : Task;
 begin
 	db := setTasks(filename);
 	buildDependencies(db, filename);
@@ -464,6 +452,7 @@ var
 	dep, ava : String;
 	com, ass : String;
 	sch, fin : String;
+	lat      : String;
 	tk       : Task;
 	i        : LongInt;
 begin
@@ -500,8 +489,10 @@ begin
 		if (tk.FinishTime = -1) then
 		begin
 			fin := '';
+			lat := '';
 		end else begin
 			fin := ' and finishes at '+IntToStr(tk.FinishTime);
+			lat := ', so its latency is '+IntToStr(tk.FinishTime-tk.DueDate);
 		end;
 		if (tk.AssignedMachine = -2) then
 		begin
@@ -509,7 +500,7 @@ begin
 		end else begin
 			ass := '. This task is assigned to a machine no. '+IntToStr(tk.AssignedMachine);
 		end;
-		writeln('The task ', tk.id, ' lasts ', tk.ExecutionTime, sch, dep, ava, com, fin, ass, '.');
+		writeln('The task ', tk.id, ' lasts ', tk.ExecutionTime, sch, dep, ava, com, fin, lat, ass, '.');
 	end;
 end;
 
@@ -576,7 +567,7 @@ begin
 		times[0] := db.Content[i].DueDate;
 		for tk in getAllNextTasks(db, db.Content[i]) do
 		begin
-			SetLength(times, j);
+			SetLength(times, j+1);
 			times[j] := tk.DueDate;
 			Inc(j);
 		end;
@@ -600,6 +591,24 @@ begin
   //writeln('sorted');
 end;
 
+procedure setSemaphoreDown(var db : TaskDB; id : Integer);
+var
+	pom   : Task;
+	tk    : Task;
+	index : LongInt;
+begin
+	pom := getTaskByID(db, id);
+	//writeln('before');
+	//writeln('addr  ', getTaskDBAddress(db, id));
+	//writeln('state ', db.Content[getTaskDBAddress(db, id)].ReadyToGo);
+	//for index in pom.NextTasks do 
+	//	Dec(db.Content[getTaskDBAddress(db, index)].ReadyToGo);
+	Dec(db.Content[getTaskDBAddress(db, id)].ReadyToGo);
+	//writeln('after');
+	//writeln('addr  ', getTaskDBAddress(db, id));
+	//writeln('state ', db.Content[getTaskDBAddress(db, id)].ReadyToGo);
+end;
+
 function applyLiu(var db : TaskDB) : LongInt;
 var
 	criticalpath : LongInt;
@@ -614,7 +623,7 @@ var
 	xd           : TLongInts;
 begin
 	criticalpath := applyCPM(db);
-	printDBContent(db);
+	//printDBContent(db);
 	latency := -TMAX;
 	table_unvisit(db.Content);
 	setModifiedDueDates(db);
@@ -623,27 +632,33 @@ begin
 
 	TimeCursor := 0;
 	repeat
-		writeln('time: ', TimeCursor);
+		//writeln('time: ', TimeCursor);
+		//for TaskEbx in db.Content do write(' ', TaskEbx.ModifiedDueDate:7);
+		//writeln();
+		//for TaskEbx in db.Content do write(' ', TaskEbx.Visited:7);
+		//writeln();
+		//for TaskEbx in db.Content do write(' ', TaskEbx.ReadyToGo:7);
+		//writeln();
 		if Length(getAvailableTasks(db, TimeCursor)) > 0 then
 		begin
 			IntEax := extractMostUrgentAddr(getAvailableTasks(db, TimeCursor));
-			writeln(IntEax);
-			writeln(db.Content[IntEax].id);
+			//writeln(IntEax);
+			//writeln(db.Content[IntEax].id);
 			db.Content[IntEax].Visited := true;
 			db.Content[IntEax].CommenceTime := TimeCursor;
 			db.Content[IntEax].AssignedMachine := 1;
 			Progress := 1;
 			while (Progress < db.Content[IntEax].ExecutionTime) do 
 			begin
-				if Length(getAvailableTasks(db, TimeCursor+Progress)) > 0 then
+				if Length(getAvailableTasks(db, TimeCursor+Progress)) > 0 then // jeżeli już jest jakiś bardziej pilny task
 				begin
 					IntEbx := extractMostUrgentAddr(getAvailableTasks(db, TimeCursor+Progress));
 					if (db.Content[IntEbx].ModifiedDueDate < db.Content[IntEax].ModifiedDueDate)
 					and (db.Content[IntEbx].id <> db.Content[IntEax].id) 
 					then begin
 						TaskEax := db.Content[IntEax];
-						TaskEax.AvailabilityTime := TimeCursor+Progress+1;
-						TaskEax.ArrivalTime := TimeCursor+Progress+1;
+						TaskEax.AvailabilityTime := TimeCursor+Progress;
+						TaskEax.ArrivalTime := TimeCursor+Progress;
 						TaskEax.ExecutionTime := db.Content[IntEax].ExecutionTime-Progress;
 						TaskEax.Visited := false;
 						appendNewTaskToDB(db, TaskEax);
@@ -655,19 +670,31 @@ begin
 			end;
 			if (TimeCursor+Progress-db.Content[IntEax].DueDate > latency) then
 				latency := TimeCursor+Progress-db.Content[IntEax].DueDate;
+
 			db.Content[IntEax].FinishTime := TimeCursor+Progress;
+
+			if (table_allVisited(getAllSubTasks(db, db.Content[IntEax].id))) then  // jeżeli wszytkie podzadania już zostały odwiedzone i wykonane
+				for IntEbx in db.Content[IntEax].NextTasks do 
+				begin
+					//writeln('intebx - ', IntEbx);
+					//writeln('addr   - ', getTaskDBAddress(db, IntEbx));
+					//Dec(db.Content[getTaskDBAddress(db, IntEbx)].ReadyToGo);
+					setSemaphoreDown(db, IntEbx);
+				end;
+
+
 			Inc(TimeCursor, Progress);
 		end else begin
 			Inc(TimeCursor);
 		end;
-	until allVisited(db);
-	//until TimeCursor = 20;
+	until table_allVisited(db.Content);
+
 
 
 	db.Latency := latency;
 
 	// done
-	applyLiu := TimeCursor+bonus;
+	applyLiu := TimeCursor;
 end;
 
 // ========== Schedule Generation
@@ -802,7 +829,7 @@ begin
     	TaskX := tk.CommenceTime*100+100;
     	TaskY := tk.AssignedMachine*100;
     	TaskLength := tk.ExecutionTime*100;
-    	writeln('Task ',tk.id:3,': ', TaskX, ' ', TaskY, ' ', TaskLength);
+    	//writeln('Task ',tk.id:3,': ', TaskX, ' ', TaskY, ' ', TaskLength);
     	writeln(fp, '<rect x="',TaskX,'" y="',TaskY,'" width="',TaskLength,'" height="100" style="fill:rgb(128,128,255);stroke-width:2;stroke:rgb(0,0,0)" />');
     	writeln(fp, '<text x="',TaskX+10,'" y="',TaskY+60,'" font-family="Verdana" font-size="18" fill="white">Task ',tk.id,'</text>');
     end; 
