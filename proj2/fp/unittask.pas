@@ -109,10 +109,10 @@ begin
 	SetLength(pom.PrevTasks, 0);
 	SetLength(pom.NextTasks, 0);
 	pom.Visited := false;
-	buildTask := pom;
 	pom.RowID := -1;
 	pom.FinishTime := -1;
 	pom.ReadyToGo := 0;
+	buildTask := pom;
 end;
 
 procedure addDependency(var destination : Task; var origin : Task);

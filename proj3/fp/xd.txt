@@ -1,0 +1,41 @@
+AFTER DATABASE LOAD:
+The task 1 lasts 1, is independent.
+The task 2 lasts 1, is independent.
+The task 3 lasts 1, is independent.
+The task 4 lasts 1, is independent.
+The task 5 lasts 1, is dependent on [ 4 ].
+The task 6 lasts 1, is dependent on [ 4 ].
+The task 7 lasts 1, is dependent on [ 4 ].
+The task 8 lasts 1, is dependent on [ 4 ].
+The task 9 lasts 1, is dependent on [ 1 ].
+1 2 3 4 
+yes
+5 6 7 8 9 
+yes
+
+AFTER CPM APPLICATION:
+The task 1 lasts 1, is independent, but in fact it begins at 0. This task is assigned to a machine no. 1.
+The task 2 lasts 1, is independent, but in fact it begins at 0. This task is assigned to a machine no. 2.
+The task 3 lasts 1, is independent, but in fact it begins at 0. This task is assigned to a machine no. 3.
+The task 4 lasts 1, is independent, but in fact it begins at 0. This task is assigned to a machine no. 4.
+The task 5 lasts 1, is dependent on [ 4 ], but in fact it begins at 1. This task is assigned to a machine no. 1.
+The task 6 lasts 1, is dependent on [ 4 ], but in fact it begins at 1. This task is assigned to a machine no. 2.
+The task 7 lasts 1, is dependent on [ 4 ], but in fact it begins at 1. This task is assigned to a machine no. 3.
+The task 8 lasts 1, is dependent on [ 4 ], but in fact it begins at 1. This task is assigned to a machine no. 4.
+The task 9 lasts 1, is dependent on [ 1 ], but in fact it begins at 1. This task is assigned to a machine no. 5.
+
+AFTER SCHEDULE BUILD:
+The task 1 lasts 1, is independent. This task is assigned to a machine no. 1.
+The task 2 lasts 1, is independent. This task is assigned to a machine no. 2.
+The task 3 lasts 1, is independent. This task is assigned to a machine no. 3.
+The task 4 lasts 1, is independent, but in fact it begins at 0. This task is assigned to a machine no. 1.
+The task 5 lasts 1, is dependent on [ 4 ], but in fact it begins at 0. This task is assigned to a machine no. 2.
+The task 6 lasts 1, is dependent on [ 4 ], but in fact it begins at 0. This task is assigned to a machine no. 3.
+The task 7 lasts 1, is dependent on [ 4 ], but in fact it begins at 1. This task is assigned to a machine no. 1.
+The task 8 lasts 1, is dependent on [ 4 ]. This task is assigned to a machine no. 1.
+The task 9 lasts 1, is dependent on [ 1 ]. This task is assigned to a machine no. 2.
+
+Critical Path Length:  2
+Actual Execution Time: 2
+A schedule image has been generated to the file "Harmonogram.svg".
+A graph image has been generated to the file "Graf.svg".
